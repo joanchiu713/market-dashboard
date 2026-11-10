@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>費半 × 台積電ADR × 台指期夜盤 每日行情</title>
+<script src="vendor/d3.min.js"></script>
+<style>
+:root {
+  --bg: #f7f7f5; --panel: #ffffff; --fg: #1f1f1d; --muted: #6b6a66; --line: #e4e2dc;
+  --up: #c9372c; --down: #1f8a4c; --warn: #c06a00; --grid: #ecebe6;
+  --c1: #3266ad; --c2: #8a4fbf; --c3: #c2672b;
+  --serif: "Noto Serif TC", "Songti TC", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1b1a; --panel: #242422; --fg: #ecebe6; --muted: #a3a29c; --line: #3a3936;
+    --up: #f0675b; --down: #4cc27e; --warn: #f0a23c; --grid: #2f2e2b;
+    --c1: #6f9be0; --c2: #b78ae6; --c3: #e89a5c;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-family: var(--serif); font-weight: 400; font-size: 1.75rem; margin: 0; }
+.sub { color: var(--muted); margin: 4px 0 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.card h2 { font-size: 1.05rem; font-weight: 600; margin: 0; }
+.note { color: var(--muted); font-size: .8rem; margin: 2px 0 8px; }
+.big { font-family: var(--serif); font-size: 2.5rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.delta { font-variant-numeric: tabular-nums; margin-top: 4px; }
+.up { color: var(--up); } .down { color: var(--down); } .hot { color: var(--warn); }
+.vol { font-variant-numeric: tabular-nums; margin-top: 8px; }
+.chart { position: relative; min-height: 180px; margin-top: 12px; }
+.chart svg { display: block; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.15); padding: 4px 8px; font-size: .8rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tip .d { color: var(--muted); }
+.tablewrap { max-height: 30rem; overflow: auto; margin-top: 8px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { position: sticky; top: 0; background: var(--panel); text-align: right; font-weight: 600; color: var(--muted); font-size: .8rem; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+@media (max-width: 560px) { .hide-sm { display: none; } .big { font-size: 2rem; } }
+.foot { color: var(--muted); font-size: .8rem; }
+.foot a { color: inherit; }
+.err { color: var(--up); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>費半 × 台積電ADR × 台指期夜盤 每日行情</h1>
+    <p class="sub">美股交易日 D 的費半與台積電 ADR 收盤，對照台指期 D 日夜盤（台北 D 15:00 至 D+1 05:00）。紅漲綠跌。</p>
+  </header>
+
+  <section class="grid">
+    <div class="card">
+      <h2>費城半導體指數（SOX）</h2>
+      <div class="note">最新收盤 · <span id="sox-date">—</span>（美東）</div>
+      <div class="big" id="sox-close">—</div>
+      <div class="delta"><span id="sox-chg"></span>　<span id="sox-pct"></span>　<span class="note">較前一交易日</span></div>
+      <div class="chart" id="sox-chart"></div>
+    </div>
+    <div class="card">
+      <h2>台積電 ADR（TSM）</h2>
+      <div class="note">最新收盤 · <span id="tsm-date">—</span>（美東，美元）</div>
+      <div class="big" id="tsm-close">—</div>
+      <div class="delta"><span id="tsm-chg"></span>　<span id="tsm-pct"></span>　<span class="note">較前一交易日</span></div>
+      <div class="chart" id="tsm-chart"></div>
+    </div>
+    <div class="card">
+      <h2>台指期夜盤（盤後時段，近月）</h2>
+      <div class="note">最新夜盤 · <span id="txf-date">—</span> 起盤（台北）</div>
+      <div class="big" id="txf-close">—</div>
+      <div class="delta"><span id="txf-chg"></span>　<span id="txf-pct"></span>　<span class="note">較開盤參考價</span></div>
+      <div class="vol"><span class="note">成交量</span> <b id="txf-vol">—</b> <span class="note">口 · 3個月均量</span> <span id="txf-avg">—</span> <span class="note">· 量比</span> <b id="txf-ratio">—</b></div>
+      <div class="note" id="txf-avgnote"></div>
+      <div class="chart" id="txf-chart"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>每日對照</h2>
+    <div class="note">新到舊；空白代表該日休市或資料尚未更新。量比 = 當日夜盤量 ÷ 前三個月均量，≥1.2 倍以橘色標示。</div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th>日期</th><th>費半收盤</th><th>費半漲跌幅</th><th>ADR收盤</th><th>ADR漲跌幅</th>
+          <th>夜盤收盤</th><th class="hide-sm">夜盤漲跌點</th><th>夜盤漲跌幅</th><th>夜盤成交量</th><th class="hide-sm">量比</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div>資料最後檢查：<span id="updated">—</span>　<span id="warn" class="err"></span></div>
+    <div>來源：費半、台積電 ADR — Yahoo Finance 日線收盤；台指期夜盤 — 臺灣期貨交易所每日交易行情（盤後交易時段，近月）。2026/9–11/9 初始資料彙整自中央社、經濟日報、StockAnalysis 等公開報導。僅供參考，非投資建議。</div>
+  </footer>
+</div>
+
+<script>
+(async () => {
+  const get = (f) => fetch(`data/${f}.json?t=${Date.now()}`).then((r) => r.ok ? r.json() : null).catch(() => null);
+  const [sox, tsm, txf, meta] = await Promise.all(['sox', 'tsm', 'txf', 'meta'].map(get));
+
+  const f2 = d3.format(',.2f'), f0 = d3.format(',.0f');
+  const fpct = (v) => (v > 0 ? '+' : '') + d3.format('.2%')(v);
+  const sgn = (fmt) => (v) => (v > 0 ? '+' : '') + fmt(v);
+  const tone = (el, v) => { el.classList.toggle('up', v > 0); el.classList.toggle('down', v < 0); };
+  const $ = (id) => document.getElementById(id);
+  const parse = d3.utcParse('%Y-%m-%d'), fdate = d3.utcFormat('%-m/%-d');
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  const withChg = (rows) => {
+    const r = (rows || []).map((d) => ({ date: d.date, close: +d.close })).sort((a, b) => a.date < b.date ? -1 : 1);
+    return r.map((d, i) => ({ ...d, chg: i ? d.close - r[i - 1].close : null, pct: i ? d.close / r[i - 1].close - 1 : null }));
+  };
+  const S = withChg(sox), T = withChg(tsm);
+  const day = 86400000;
+  const X = (txf || []).map((d) => ({ date: d.date, close: +d.close, chg: +d.chg, vol: d.vol == null ? null : +d.vol }))
+    .map((d) => ({ ...d, pct: d.chg / (d.close - d.chg) })).sort((a, b) => a.date < b.date ? -1 : 1)
+    .map((d, _, all) => {
+      const t = Date.parse(d.date);
+      const prior = all.filter((p) => p.vol != null && Date.parse(p.date) < t && Date.parse(p.date) >= t - 92 * day);
+      const avg = prior.length ? d3.mean(prior, (p) => p.vol) : null;
+      return { ...d, avg, avgDays: prior.length, ratio: d.vol != null && avg ? d.vol / avg : null };
+    });
+
+  function kpi(p, rows, closeFmt, chgFmt) {
+    const last = rows[rows.length - 1]; if (!last) return;
+    $(p + '-date').textContent = last.date;
+    $(p + '-close').textContent = closeFmt(last.close);
+    const c = $(p + '-chg'), q = $(p + '-pct');
+    c.textContent = last.chg == null ? '' : chgFmt(last.chg);
+    q.textContent = last.pct == null ? '' : fpct(last.pct);
+    tone(c, last.chg); tone(q, last.pct);
+  }
+  kpi('sox', S, f2, sgn(f2));
+  kpi('tsm', T, (v) => '$' + f2(v), (v) => sgn(f2)(v));
+  kpi('txf', X, f0, (v) => sgn(f0)(v) + ' 點');
+
+  const lv = [...X].reverse().find((r) => r.vol != null);
+  if (lv) {
+    $('txf-vol').textContent = f0(lv.vol);
+    $('txf-avg').textContent = lv.avg == null ? '—' : f0(lv.avg) + ' 口';
+    $('txf-ratio').textContent = lv.ratio == null ? '—' : d3.format('.2f')(lv.ratio) + ' 倍';
+    $('txf-ratio').classList.toggle('hot', lv.ratio != null && lv.ratio >= 1.2);
+    $('txf-avgnote').textContent = (lv.date !== X[X.length - 1].date ? `成交量為 ${lv.date} 夜盤。` : '')
+      + (lv.avgDays < 60 ? `3個月均量累積中：目前有 ${lv.avgDays} 天紀錄。` : `3個月均量依前 ${lv.avgDays} 個夜盤計算。`);
+  }
+
+  const charts = [];
+  function line(id, rows, fmt, colorVar, label) {
+    const box = $(id);
+    const draw = () => {
+      box.replaceChildren();
+      const data = rows.slice(-30).map((d) => ({ t: parse(d.date), date: d.date, v: d.close }));
+      if (!data.length) return;
+      const color = css(colorVar);
+      const W = Math.max(240, box.clientWidth), H = 180;
+      const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`)
+        .attr('role', 'img').attr('aria-label', `${label}近 30 個交易日收盤走勢`);
+      const y = d3.scaleLinear(d3.extent(data, (d) => d.v), [H - 24, 8]).nice(4);
+      const ticks = y.ticks(4);
+      const probe = svg.append('text').attr('font-size', 11);
+      const ml = d3.max(ticks, (t) => probe.text(f0(t)).node().getComputedTextLength()) + 8; probe.remove();
+      const x = d3.scaleUtc(d3.extent(data, (d) => d.t), [ml + 16, W - 24]);
+      svg.append('g').selectAll('line').data(ticks).join('line').attr('x1', ml).attr('x2', W - 8).attr('y1', y).attr('y2', y).attr('stroke', css('--grid'));
+      svg.append('g').selectAll('text').data(ticks).join('text').attr('x', ml - 6).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').attr('font-size', 11).attr('fill', css('--muted')).text(f0);
+      const nx = Math.max(2, Math.min(6, Math.floor((W - ml) / 70)));
+      svg.append('g').attr('transform', `translate(0,${H - 18})`).selectAll('text').data(x.ticks(nx)).join('text')
+        .attr('x', x).attr('dy', '0.71em').attr('text-anchor', (t) => x(t) > W - 40 ? 'end' : x(t) < ml + 30 ? 'start' : 'middle')
+        .attr('font-size', 11).attr('fill', css('--muted')).text(fdate);
+      svg.append('path').datum(data).attr('fill', 'none').attr('stroke', color).attr('stroke-width', 2).attr('stroke-linejoin', 'round').attr('stroke-linecap', 'round')
+        .attr('d', d3.line().x((d) => x(d.t)).y((d) => y(d.v)));
+      const dot = svg.append('circle').attr('r', 4).attr('fill', color).style('display', 'none');
+      const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; box.append(tip);
+      const bis = d3.bisector((d) => d.t).center;
+      svg.append('rect').attr('x', ml).attr('width', W - 8 - ml).attr('height', H).attr('fill', 'transparent')
+        .on('pointermove', (ev) => {
+          const d = data[bis(data, x.invert(d3.pointer(ev)[0]))];
+          dot.style('display', null).attr('cx', x(d.t)).attr('cy', y(d.v));
+          tip.replaceChildren(Object.assign(document.createElement('div'), { className: 'd', textContent: d.date }), Object.assign(document.createElement('div'), { textContent: fmt(d.v) }));
+          tip.hidden = false;
+          const k = box.clientWidth / W;
+          tip.style.left = Math.min(Math.max(0, x(d.t) * k - tip.offsetWidth / 2), box.clientWidth - tip.offsetWidth) + 'px';
+          tip.style.top = Math.max(0, y(d.v) * k - tip.offsetHeight - 10) + 'px';
+        })
+        .on('pointerleave', () => { tip.hidden = true; dot.style('display', 'none'); });
+    };
+    charts.push(draw); draw();
+  }
+  line('sox-chart', S, f2, '--c1', '費半');
+  line('tsm-chart', T, (v) => 'US$ ' + f2(v), '--c3', '台積電ADR');
+  line('txf-chart', X, f0, '--c2', '台指期夜盤');
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => charts.forEach((f) => f()), 150); });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => charts.forEach((f) => f()));
+
+  // 對照表
+  const m = new Map();
+  const blank = (date) => ({ date });
+  S.forEach((d) => m.set(d.date, Object.assign(m.get(d.date) || blank(d.date), { sc: d.close, sp: d.pct })));
+  T.forEach((d) => m.set(d.date, Object.assign(m.get(d.date) || blank(d.date), { tc: d.close, tp: d.pct })));
+  X.forEach((d) => m.set(d.date, Object.assign(m.get(d.date) || blank(d.date), { xc: d.close, xg: d.chg, xp: d.pct, xv: d.vol, xr: d.ratio })));
+  const tb = $('tbody');
+  [...m.values()].sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 60).forEach((r) => {
+    const tr = document.createElement('tr');
+    const cell = (text, v, cls) => { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; if (v != null) tone(td, v); tr.append(td); };
+    cell(r.date);
+    cell(r.sc == null ? '' : f2(r.sc)); cell(r.sp == null ? '' : fpct(r.sp), r.sp);
+    cell(r.tc == null ? '' : f2(r.tc)); cell(r.tp == null ? '' : fpct(r.tp), r.tp);
+    cell(r.xc == null ? '' : f0(r.xc)); cell(r.xg == null ? '' : sgn(f0)(r.xg), r.xg, 'hide-sm');
+    cell(r.xp == null ? '' : fpct(r.xp), r.xp); cell(r.xv == null ? '' : f0(r.xv));
+    const td = document.createElement('td'); td.className = 'hide-sm' + (r.xr >= 1.2 ? ' hot' : ''); td.textContent = r.xr == null ? '' : d3.format('.2f')(r.xr) + '×'; tr.append(td);
+    tb.append(tr);
+  });
+
+  if (meta) {
+    $('updated').textContent = new Date(meta.updated_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false }) + '（台北）';
+    if (meta.warnings && meta.warnings.length) $('warn').textContent = `⚠ ${meta.warnings.length} 則提醒（見 data/meta.json）`;
+  }
+  if (!sox && !tsm && !txf) $('updated').textContent = '資料載入失敗';
+})();
+</script>
+</body>
+</html>
