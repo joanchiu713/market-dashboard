@@ -1,0 +1,38 @@
+name: 每日更新行情資料
+
+on:
+  schedule:
+    # GitHub 的排程用 UTC。台北 = UTC+8
+    - cron: "35 22 * * 1-5"   # 台北週二至週六 06:35：抓美股收盤（費半、台積電ADR）
+    - cron: "35 8 * * 1-5"    # 台北週一至週五 16:35：期交所公布含夜盤的每日行情後再抓一次
+  workflow_dispatch: {}        # 允許在 Actions 頁面手動按「Run workflow」
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: 抓資料
+        run: python scripts/update.py
+      - name: 有變動就提交
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "沒有變動"
+          else
+            git commit -m "資料更新 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')"
+            git push
+          fi
